@@ -4,16 +4,41 @@ import re
 import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
+
+import ssl
 
 import requests
+import urllib3
 from bs4 import BeautifulSoup
+from requests.adapters import HTTPAdapter
+from urllib3.util.ssl_ import create_urllib3_context
 
 import config
 from keywords import is_failure_notice
 
+
+class _LegacyTLSAdapter(HTTPAdapter):
+    """DH_KEY_TOO_SMALL 等、古い暗号のサーバに接続するためのアダプタ。"""
+
+    def init_poolmanager(self, *args, **kwargs):
+        ctx = create_urllib3_context(ciphers="DEFAULT@SECLEVEL=1")
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        kwargs["ssl_context"] = ctx
+        return super().init_poolmanager(*args, **kwargs)
+
 # 一部自治体はRSS/XMLを返すため、HTMLパーサ警告は抑制
 warnings.filterwarnings("ignore", category=getattr(__import__("bs4"), "XMLParsedAsHTMLWarning", Warning))
+# SSL検証を外して再取得する自治体向けに、警告を抑制
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+# 403(bot対策)を減らすためのブラウザ風ヘッダ
+BROWSER_HEADERS = {
+    "User-Agent": config.USER_AGENT,
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
+}
 
 _WS = re.compile(r"\s+")
 
@@ -71,13 +96,49 @@ def _decode(resp) -> str:
     return resp.text
 
 
-def _get(url: str):
-    resp = requests.get(
-        url, timeout=config.HTTP_TIMEOUT,
-        headers={"User-Agent": config.USER_AGENT}, allow_redirects=True,
+# 古い暗号のサーバ向けセッション（使い回す）
+_legacy_session = requests.Session()
+_legacy_session.mount("https://", _LegacyTLSAdapter())
+
+
+def _try(url: str, verify: bool = True, legacy: bool = False):
+    getter = _legacy_session.get if legacy else requests.get
+    resp = getter(
+        url, timeout=config.HTTP_TIMEOUT, headers=BROWSER_HEADERS,
+        allow_redirects=True, verify=False if legacy else verify,
     )
     resp.raise_for_status()
     return resp
+
+
+def _get(url: str):
+    """堅牢な取得（段階的フォールバック）：
+    - SSL検証エラー → 検証を外す → さらにレガシーTLSで再取得
+    - 404等でURLが古い → ドメインのトップにフォールバック
+    - https接続不能・TLS不整合 → httpも試す
+    """
+    parts = urlsplit(url)
+    root = f"{parts.scheme}://{parts.netloc}/"
+    candidates = [url] if url == root else [url, root]
+    if parts.scheme == "https":
+        candidates.append(f"http://{parts.netloc}/")
+
+    last_exc = None
+    for cand in candidates:
+        # (通常verify) → (verify無効) → https のみ(レガシーTLS)
+        attempts = [{"verify": True}, {"verify": False}]
+        if cand.startswith("https"):
+            attempts.append({"legacy": True})
+        for kw in attempts:
+            try:
+                return _try(cand, **kw)
+            except requests.exceptions.SSLError as e:
+                last_exc = e
+                continue  # 同じURLで検証無効→レガシーへ段階的に緩める
+            except Exception as e:  # noqa: BLE001
+                last_exc = e
+                break     # SSL以外は次の候補(トップ/ http)へ
+    raise last_exc
 
 
 def fetch_site(rec: Dict[str, str]) -> Dict:
