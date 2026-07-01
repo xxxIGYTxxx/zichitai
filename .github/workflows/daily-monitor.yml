@@ -1,0 +1,45 @@
+name: 自治体障害情報 日次モニター
+
+on:
+  schedule:
+    # 22:45 UTC = 07:45 JST。巡回に約12分かかるため 8:00 前後に配信完了する想定。
+    # （GitHubのスケジュールは数分遅延することがある）
+    - cron: "45 22 * * *"
+  workflow_dispatch: {}   # 手動実行も可
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jichitai-monitor
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 依存インストール
+        run: pip install -r requirements.txt
+
+      # 差分状態(seen.json)を日次キャッシュで永続化（毎日アクセスされるので消えない）
+      - name: 状態キャッシュ復元/保存
+        uses: actions/cache@v4
+        with:
+          path: state/seen.json
+          key: seen-${{ github.run_id }}
+          restore-keys: |
+            seen-
+
+      - name: 巡回・差分・メール送信
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+        run: python3 main.py
