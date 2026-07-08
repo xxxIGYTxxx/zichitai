@@ -51,3 +51,6 @@ MAIL_TO_LIST = [a.strip() for a in MAIL_TO.split(",") if a.strip()]
 MAIL_FROM = os.getenv("MAIL_FROM", GMAIL_USER or "niwatori67@gmail.com")
 SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "465"))
+
+# 「新規なし」でもメールを送るか。毎時実行では false にして障害時だけ通知する
+NOTIFY_EMPTY = os.getenv("NOTIFY_EMPTY", "true").lower() in ("1", "true", "yes")

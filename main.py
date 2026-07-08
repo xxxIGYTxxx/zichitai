@@ -46,6 +46,7 @@ def main() -> int:
         html = build_html(by_site, stats, is_seeding=False)
         total = sum(len(s["items"]) for s in by_site)
         subject = f"[自治体障害情報] 現状スナップショット {date_s} 全国{total}件 / {len(by_site)}自治体"
+        skip_empty = False
     else:
         st = state_mod.load_state()
         new_by_site, is_seeding = state_mod.diff_and_update(st, results)
@@ -58,12 +59,18 @@ def main() -> int:
             subject = f"[自治体障害情報] {date_s} 新規{total_new}件 / {len(new_by_site)}自治体"
         else:
             subject = f"[自治体障害情報] {date_s} 新規なし"
+        # 毎時実行では「新規なし」メールを送らない（NOTIFY_EMPTY=false時）
+        skip_empty = (not is_seeding) and total_new == 0 and not config.NOTIFY_EMPTY
 
     if args.dry_run:
         out = config.STATE_DIR / "preview.html"
         out.write_text(html, encoding="utf-8")
         print(f"[dry-run] 件名: {subject}")
         print(f"[dry-run] HTML出力: {out}")
+        return 0
+
+    if skip_empty:
+        print(f"新規なしのため送信スキップ: {subject}")
         return 0
 
     send_email(html, subject)
