@@ -8,7 +8,7 @@ on:
   workflow_dispatch: {}   # 手動実行も可
 
 permissions:
-  contents: read
+  contents: write   # keepaliveコミット（自動無効化の防止）に必要
 
 concurrency:
   group: jichitai-monitor
@@ -44,3 +44,24 @@ jobs:
           MAIL_TO: ${{ secrets.MAIL_TO }}
           NOTIFY_EMPTY: "false"   # 新規なしの時はメールを送らない
         run: python3 main.py
+
+      # GitHubは60日間コミットが無いとスケジュールを自動停止する(disabled_inactivity)。
+      # 25日以上コミットが無ければ打刻コミットを入れ、停止を確実に防ぐ。
+      - name: keepalive（スケジュール自動停止の防止）
+        if: github.event_name == 'schedule'
+        continue-on-error: true   # 失敗しても本体の監視は成功扱いにする
+        run: |
+          LAST=$(git log -1 --format=%ct)
+          DAYS=$(( ( $(date +%s) - LAST ) / 86400 ))
+          echo "最終コミットから ${DAYS} 日経過"
+          if [ "$DAYS" -ge 25 ]; then
+            date -u +"%Y-%m-%dT%H:%M:%SZ" > .keepalive
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add .keepalive
+            git commit -m "chore: keepalive（スケジュール自動停止の防止）"
+            git push
+            echo "keepaliveコミットを実行しました"
+          else
+            echo "まだ猶予があるため何もしません"
+          fi

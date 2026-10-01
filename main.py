@@ -51,14 +51,24 @@ def main() -> int:
         st = state_mod.load_state()
         new_by_site, is_seeding = state_mod.diff_and_update(st, results)
         state_mod.save_state(st)
-        html = build_html(new_by_site, stats, is_seeding)
         total_new = sum(len(s["items"]) for s in new_by_site)
         if is_seeding:
-            subject = f"[自治体障害情報] 監視を初期化しました（{stats['sites']}自治体）"
-        elif total_new:
-            subject = f"[自治体障害情報] {date_s} 新規{total_new}件 / {len(new_by_site)}自治体"
+            # 初回/キャッシュ消失後。静かに既知化すると進行中の障害を丸ごと
+            # 取りこぼすため、現在検出できる障害を全件スナップショットで通知する。
+            snapshot = [
+                {"pref": r["pref"], "city": r["city"], "url": r["url"], "items": r["items"]}
+                for r in results if r["items"]
+            ]
+            html = build_html(snapshot, stats, is_seeding=False)
+            total_cur = sum(len(s["items"]) for s in snapshot)
+            subject = (f"[自治体障害情報] 監視開始: 現在の障害 "
+                       f"全国{total_cur}件 / {len(snapshot)}自治体")
         else:
-            subject = f"[自治体障害情報] {date_s} 新規なし"
+            html = build_html(new_by_site, stats, is_seeding)
+            if total_new:
+                subject = f"[自治体障害情報] {date_s} 新規{total_new}件 / {len(new_by_site)}自治体"
+            else:
+                subject = f"[自治体障害情報] {date_s} 新規なし"
         # 毎時実行では「新規なし」メールを送らない（NOTIFY_EMPTY=false時）
         skip_empty = (not is_seeding) and total_new == 0 and not config.NOTIFY_EMPTY
 

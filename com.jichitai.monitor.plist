@@ -11,7 +11,7 @@
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
-        <string>/Users/kenichiroyamamoto/Documents/Claude Code/仮想通貨ウォレット監視/jichitai_monitor/run.sh</string>
+        <string>/Users/kenichiroyamamoto/Documents/Claude Code/Claude_product/zichitai/jichitai_monitor/run.sh</string>
     </array>
 
     <key>StartCalendarInterval</key>
