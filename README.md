@@ -80,6 +80,12 @@ launchctl load ~/Library/LaunchAgents/com.jichitai.monitor.plist
 - 並列数・タイムアウト・追跡page数は `.env` または `config.py`
 - 監視対象の増減は `data/municipalities.csv` を直接編集
 
+## 関連：不正アクセス・サイバー攻撃ニュース
+
+同じ仕組み・同じGmail設定で、不正アクセス・サイバー攻撃・情報漏えいのニュースを毎朝届ける
+日次ダイジェストを `cyber_news/` に置いている（ワークフロー `.github/workflows/cyber-news.yml`）。
+詳細は [cyber_news/README.md](cyber_news/README.md)。
+
 ## 精度について
 
 - 判定は**リンク文言ベース**。障害告知は多くが「お知らせ一覧」に載るため1階層追跡で捕捉

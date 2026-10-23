@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- macOSローカルで毎朝7:30に実行する launchd 設定。
+     ~/Library/LaunchAgents/ に配置し `launchctl load` する。
+     ※ Macが起動している必要がある。常時稼働ならGitHub Actions推奨。
+     ※ GitHub Actions と両方動かすと、メールが2通届くのでどちらか一方にすること。
+     ProgramArguments のパスは環境に合わせて書き換えること。 -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.jichitai.cybernews</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/kenichiroyamamoto/Documents/Claude Code/Claude_product/zichitai/jichitai_monitor/cyber_news/run.sh</string>
+    </array>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>7</integer>
+        <key>Minute</key>
+        <integer>30</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/jichitai_cybernews.out</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/jichitai_cybernews.err</string>
+</dict>
+</plist>

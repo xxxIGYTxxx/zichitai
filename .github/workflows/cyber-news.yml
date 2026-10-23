@@ -1,0 +1,50 @@
+name: 不正アクセス・サイバー攻撃ニュース 日次ダイジェスト
+
+on:
+  schedule:
+    # 毎朝 7:30 JST（22:30 UTC）。GitHubのスケジュールは数分〜数十分遅れることがあるため、
+    # 8:00頃に届くよう早めに起動する。毎時ちょうどは混むので30分にずらしている。
+    - cron: "30 22 * * *"
+  workflow_dispatch: {}   # 手動実行も可
+
+permissions:
+  contents: read   # スケジュール停止防止のkeepaliveは daily-monitor.yml が担う
+
+concurrency:
+  group: cyber-news
+  cancel-in-progress: false
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: cyber_news
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 依存インストール
+        run: pip install -r ../requirements.txt
+
+      # 送信済み記事(seen.json)をキャッシュで永続化。
+      # 送信に失敗するとジョブが失敗し、キャッシュも保存されない（翌日に再送される）
+      - name: 状態キャッシュ復元/保存
+        uses: actions/cache@v4
+        with:
+          path: cyber_news/state/seen.json
+          key: cyber-seen-${{ github.run_id }}
+          restore-keys: |
+            cyber-seen-
+
+      - name: 取得・判定・メール送信
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+          NOTIFY_EMPTY: "true"   # 日刊なので新着なしでも送る
+        run: python3 main.py
